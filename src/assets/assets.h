@@ -1,0 +1,27 @@
+#pragma once
+
+#include <lvgl.h>
+
+/* Factory wallpaper + launcher icons extracted from Waveshare 06_esp-brookesia.bin */
+LV_IMG_DECLARE(img_wallpaper);
+LV_IMG_DECLARE(img_app_aichats);
+LV_IMG_DECLARE(img_app_settings);
+LV_IMG_DECLARE(img_app_photos);
+LV_IMG_DECLARE(img_app_music);
+LV_IMG_DECLARE(img_app_video);
+LV_IMG_DECLARE(img_app_analyzer);
+LV_IMG_DECLARE(img_app_gravity);
+LV_IMG_DECLARE(img_app_ebook);
+LV_IMG_DECLARE(esp_brookesia_app_icon_launcher_squareline_112_112);
+
+/* Official Brookesia small (240px) status / recents assets */
+LV_IMG_DECLARE(esp_brookesia_image_small_status_bar_wifi_close_20_20);
+LV_IMG_DECLARE(esp_brookesia_image_small_status_bar_wifi_level1_20_20);
+LV_IMG_DECLARE(esp_brookesia_image_small_status_bar_wifi_level2_20_20);
+LV_IMG_DECLARE(esp_brookesia_image_small_status_bar_wifi_level3_20_20);
+LV_IMG_DECLARE(esp_brookesia_image_small_status_bar_battery_charge_20_20);
+LV_IMG_DECLARE(esp_brookesia_image_small_status_bar_battery_level1_20_20);
+LV_IMG_DECLARE(esp_brookesia_image_small_status_bar_battery_level2_20_20);
+LV_IMG_DECLARE(esp_brookesia_image_small_status_bar_battery_level3_20_20);
+LV_IMG_DECLARE(esp_brookesia_image_small_status_bar_battery_level4_20_20);
+LV_IMG_DECLARE(esp_brookesia_image_small_recents_screen_trash_38_38);

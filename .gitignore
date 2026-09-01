@@ -1,0 +1,9 @@
+.pio
+.vscode
+.clangd
+.cache
+compile_commands.json
+*.bin
+*.elf
+*.map
+sdkconfig.old
