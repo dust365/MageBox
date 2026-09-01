@@ -20,6 +20,7 @@ lv_obj_t *s_wifi_scan_label = nullptr;
 lv_obj_t *s_qr_status = nullptr;
 lv_obj_t *s_brightness_bar = nullptr;
 lv_obj_t *s_brightness_label = nullptr;
+lv_obj_t *s_rotation_switch = nullptr;
 lv_obj_t *s_battery_bar = nullptr;
 lv_obj_t *s_battery_label = nullptr;
 int s_last_scan_count = -99;
@@ -303,9 +304,9 @@ void settings_app::create(const AppContext &context)
 
     lv_obj_t *rotation = ui_components::make_card(content, 2, 36);
     make_setting_label(rotation, "Auto-rotate");
-    lv_obj_t *rotation_switch = ui_components::make_switch(rotation, hal_autorotate_enabled());
-    lv_obj_align(rotation_switch, LV_ALIGN_RIGHT_MID, -8, 0);
-    lv_obj_add_event_cb(rotation_switch, [](lv_event_t *event) {
+    s_rotation_switch = ui_components::make_switch(rotation, hal_autorotate_enabled());
+    lv_obj_align(s_rotation_switch, LV_ALIGN_RIGHT_MID, -8, 0);
+    lv_obj_add_event_cb(s_rotation_switch, [](lv_event_t *event) {
         lv_obj_t *control = (lv_obj_t *)lv_event_get_target(event);
         hal_autorotate_enable(lv_obj_has_state(control, LV_STATE_CHECKED));
     }, LV_EVENT_VALUE_CHANGED, nullptr);
@@ -369,6 +370,13 @@ void settings_app::create(const AppContext &context)
     lv_obj_set_pos(scroll_end, 0, 243);
 }
 
+void settings_app::open_wifi()
+{
+    if (!s_context.root || !s_context.push_overlay) return;
+    if (s_wifi_list) return;
+    open_wifi_page();
+}
+
 void settings_app::update()
 {
     uint32_t now = lv_tick_get();
@@ -376,6 +384,13 @@ void settings_app::update()
         s_last_status_update = now;
         refresh_battery();
         refresh_wifi_status();
+        if (!s_drag.active) set_brightness(hal_get_brightness());
+        if (s_rotation_switch) {
+            bool enabled = hal_autorotate_enabled();
+            bool checked = lv_obj_has_state(s_rotation_switch, LV_STATE_CHECKED);
+            if (enabled && !checked) lv_obj_add_state(s_rotation_switch, LV_STATE_CHECKED);
+            else if (!enabled && checked) lv_obj_remove_state(s_rotation_switch, LV_STATE_CHECKED);
+        }
     }
     if (s_wifi_list) {
         int count = wifi_svc_scan_done() ? wifi_svc_scan_count() : -1;
@@ -401,6 +416,7 @@ void settings_app::destroy()
     s_qr_status = nullptr;
     s_brightness_bar = nullptr;
     s_brightness_label = nullptr;
+    s_rotation_switch = nullptr;
     s_battery_bar = nullptr;
     s_battery_label = nullptr;
     s_last_scan_count = -99;

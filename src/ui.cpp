@@ -1,15 +1,18 @@
 #include "ui.h"
 
 #include "apps/app_registry.h"
+#include "apps/settings/settings.h"
 #include "assets/assets.h"
 #include "board_config.h"
 #include "hal.h"
+#include "ui/control_center.h"
 #include "ui/debug_overlay.h"
 #include "ui/ui_components.h"
 #include "ui/volume_overlay.h"
 #include "wifi_svc.h"
 
 #include <Arduino.h>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 
@@ -27,6 +30,8 @@ constexpr int dot_gap = 30;
 constexpr int dot_bottom = 30;
 constexpr int page_count = 4;
 constexpr int bottom_edge = 10;
+constexpr int top_edge = 12;
+constexpr int direction_lock = 8;
 constexpr int swipe_minimum = 24;
 constexpr int recents_hold_ms = 380;
 constexpr int nav_capacity = 8;
@@ -48,7 +53,9 @@ lv_obj_t *s_status_battery_fill = nullptr;
 lv_obj_t *s_status_battery_cap = nullptr;
 lv_obj_t *s_status_battery_charge = nullptr;
 lv_obj_t *s_status_wifi = nullptr;
+lv_obj_t *s_tileview = nullptr;
 lv_obj_t *s_page_dots[page_count] = {};
+bool s_home_paging = true;
 lv_obj_t *s_nav_stack[nav_capacity] = {};
 int s_page_index = 0;
 int s_nav_depth = 0;
@@ -57,15 +64,30 @@ AppId s_running = AppId::none;
 AppId s_recent = AppId::none;
 bool s_app_alive = false;
 
+enum class GestureKind : uint8_t {
+    idle,
+    pending,
+    nav,
+    control,
+    ignored,
+};
+
 struct GestureState {
-    bool tracking = false;
+    GestureKind kind = GestureKind::idle;
     bool from_bottom = false;
+    bool from_top = false;
     int32_t x0 = 0;
     int32_t y0 = 0;
     int32_t x = 0;
     int32_t y = 0;
+    int32_t last_y = 0;
     uint32_t started_at = 0;
+    uint32_t last_at = 0;
+    int32_t velocity_y = 0;
 } s_gesture;
+
+void launch_app(AppId id);
+void set_home_paging_enabled(bool enabled);
 
 lv_obj_t *make_screen(uint32_t background = ui_components::color_bg)
 {
@@ -159,6 +181,35 @@ void show_home_screen()
 {
     s_foreground = AppId::none;
     lv_screen_load(s_home);
+}
+
+void open_wifi_settings()
+{
+    if (s_foreground != AppId::settings) launch_app(AppId::settings);
+    settings_app::open_wifi();
+}
+
+void sample_velocity(const lv_point_t &point)
+{
+    uint32_t now = millis();
+    uint32_t dt = now - s_gesture.last_at;
+    if (dt < 16) return;
+    s_gesture.velocity_y = ((int32_t)point.y - s_gesture.last_y) * 1000 / (int32_t)dt;
+    s_gesture.last_y = point.y;
+    s_gesture.last_at = now;
+}
+
+void set_home_paging_enabled(bool enabled)
+{
+    if (!s_tileview) return;
+    if (s_home_paging == enabled) return;
+    s_home_paging = enabled;
+    if (enabled) {
+        lv_obj_set_scroll_dir(s_tileview, LV_DIR_HOR);
+        return;
+    }
+    lv_obj_scroll_to_x(s_tileview, s_page_index * BOARD_LCD_H_RES, LV_ANIM_OFF);
+    lv_obj_set_scroll_dir(s_tileview, LV_DIR_NONE);
 }
 
 void go_back()
@@ -263,20 +314,20 @@ void create_home()
     lv_obj_set_style_text_font(s_status_clock, &lv_font_montserrat_16, 0);
     make_status_battery(status);
 
-    lv_obj_t *tileview = lv_tileview_create(s_home);
-    lv_obj_set_size(tileview, BOARD_LCD_H_RES, table_height);
-    lv_obj_align(tileview, LV_ALIGN_TOP_MID, 0, status_height);
-    lv_obj_set_style_bg_opa(tileview, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_bg_opa(tileview, LV_OPA_TRANSP, LV_PART_SCROLLBAR);
-    lv_obj_set_style_pad_all(tileview, 0, 0);
-    lv_obj_set_style_border_width(tileview, 0, 0);
-    lv_obj_set_scrollbar_mode(tileview, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_add_event_cb(tileview, on_home_scroll, LV_EVENT_SCROLL_END, nullptr);
+    s_tileview = lv_tileview_create(s_home);
+    lv_obj_set_size(s_tileview, BOARD_LCD_H_RES, table_height);
+    lv_obj_align(s_tileview, LV_ALIGN_TOP_MID, 0, status_height);
+    lv_obj_set_style_bg_opa(s_tileview, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(s_tileview, LV_OPA_TRANSP, LV_PART_SCROLLBAR);
+    lv_obj_set_style_pad_all(s_tileview, 0, 0);
+    lv_obj_set_style_border_width(s_tileview, 0, 0);
+    lv_obj_set_scrollbar_mode(s_tileview, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_add_event_cb(s_tileview, on_home_scroll, LV_EVENT_SCROLL_END, nullptr);
 
     for (int page_index = 0; page_index < page_count; ++page_index) {
         lv_dir_t direction = page_index == 0 ? LV_DIR_RIGHT
                              : page_index == page_count - 1 ? LV_DIR_LEFT : LV_DIR_HOR;
-        lv_obj_t *page = lv_tileview_add_tile(tileview, page_index, 0, direction);
+        lv_obj_t *page = lv_tileview_add_tile(s_tileview, page_index, 0, direction);
         lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, 0);
         lv_obj_set_style_pad_all(page, 0, 0);
         const AppDefinition *first = app_at(page_index * 2);
@@ -352,32 +403,12 @@ void refresh_recents_card()
     if (name) lv_label_set_text(name, app && s_app_alive ? app->name : "No app");
 }
 
-void handle_gesture()
+void finish_nav_gesture()
 {
-    lv_indev_t *indev = lv_indev_active();
-    if (!indev) indev = lv_indev_get_next(nullptr);
-    if (!indev) return;
-    lv_point_t point;
-    lv_indev_get_point(indev, &point);
-    lv_indev_state_t state = lv_indev_get_state(indev);
-
-    if (state == LV_INDEV_STATE_PRESSED) {
-        if (!s_gesture.tracking) {
-            s_gesture = {true, point.y >= BOARD_LCD_V_RES - bottom_edge,
-                         point.x, point.y, point.x, point.y, millis()};
-        } else {
-            s_gesture.x = point.x;
-            s_gesture.y = point.y;
-        }
-        return;
-    }
-    if (!s_gesture.tracking) return;
-
     int dy = s_gesture.y0 - s_gesture.y;
     int dx = s_gesture.x - s_gesture.x0;
     uint32_t duration = millis() - s_gesture.started_at;
     bool bottom_up = s_gesture.from_bottom && dy >= swipe_minimum && abs(dx) < dy;
-    s_gesture.tracking = false;
     if (!bottom_up) return;
 
     if (lv_screen_active() == s_recents) {
@@ -393,6 +424,74 @@ void handle_gesture()
     if (pause_mid && s_foreground != AppId::none) ui_show_recents();
     else if (s_foreground != AppId::none) go_back();
     else if (s_app_alive) ui_show_recents();
+}
+
+void handle_gesture()
+{
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) indev = lv_indev_get_next(nullptr);
+    if (!indev) return;
+    lv_point_t point;
+    lv_indev_get_point(indev, &point);
+    lv_indev_state_t state = lv_indev_get_state(indev);
+
+    if (state == LV_INDEV_STATE_PRESSED) {
+        if (s_gesture.kind == GestureKind::idle) {
+            if (control_center_is_visible()) {
+                s_gesture.kind = GestureKind::ignored;
+                return;
+            }
+            s_gesture.kind = GestureKind::pending;
+            s_gesture.from_bottom = point.y >= BOARD_LCD_V_RES - bottom_edge;
+            s_gesture.from_top = point.y <= top_edge;
+            s_gesture.x0 = point.x;
+            s_gesture.y0 = point.y;
+            s_gesture.x = point.x;
+            s_gesture.y = point.y;
+            s_gesture.last_y = point.y;
+            s_gesture.started_at = millis();
+            s_gesture.last_at = s_gesture.started_at;
+            s_gesture.velocity_y = 0;
+            return;
+        }
+
+        s_gesture.x = point.x;
+        s_gesture.y = point.y;
+        sample_velocity(point);
+
+        if (s_gesture.kind == GestureKind::pending) {
+            int dx = point.x - s_gesture.x0;
+            int dy = point.y - s_gesture.y0;
+            if (abs(dx) < direction_lock && abs(dy) < direction_lock) return;
+            if (s_gesture.from_top && dy > 0 && abs(dy) > abs(dx)) {
+                s_gesture.kind = GestureKind::control;
+                set_home_paging_enabled(false);
+                control_center_begin_pull(s_gesture.y0);
+                control_center_update_pull(point.y);
+            } else if (s_gesture.from_bottom && dy < 0 && abs(dy) > abs(dx) &&
+                       !control_center_is_visible()) {
+                s_gesture.kind = GestureKind::nav;
+            } else {
+                s_gesture.kind = GestureKind::ignored;
+            }
+            return;
+        }
+
+        if (s_gesture.kind == GestureKind::control) {
+            control_center_update_pull(point.y);
+        }
+        return;
+    }
+
+    GestureKind kind = s_gesture.kind;
+    s_gesture.kind = GestureKind::idle;
+    if (kind == GestureKind::control) {
+        control_center_finish_pull(s_gesture.velocity_y);
+        return;
+    }
+    if (kind == GestureKind::nav && !control_center_is_visible()) {
+        finish_nav_gesture();
+    }
 }
 
 void update_status()
@@ -432,12 +531,18 @@ void update_foreground_app()
 
 } // namespace
 
-void ui_go_home() { show_home_screen(); }
+void ui_go_home()
+{
+    control_center_close();
+    show_home_screen();
+}
+
 void ui_go_back() { go_back(); }
 
 void ui_show_recents()
 {
     if (!s_recents) return;
+    control_center_close();
     refresh_recents_card();
     lv_obj_remove_flag(s_recents, LV_OBJ_FLAG_HIDDEN);
     lv_screen_load_anim(s_recents, LV_SCR_LOAD_ANIM_MOVE_TOP, 160, 0, false);
@@ -447,6 +552,8 @@ void ui_init()
 {
     debug_overlay_init();
     volume_overlay_init();
+    control_center_init();
+    control_center_set_wifi_opener(open_wifi_settings);
     lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(ui_components::color_bg), 0);
     create_home();
     create_recents();
@@ -457,6 +564,8 @@ void ui_tick()
 {
     static uint32_t last_status_update = 0;
     handle_gesture();
+    set_home_paging_enabled(!control_center_is_visible());
+    control_center_tick();
     update_foreground_app();
     if (millis() - last_status_update > 500) {
         last_status_update = millis();
