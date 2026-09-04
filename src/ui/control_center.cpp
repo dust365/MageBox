@@ -6,6 +6,7 @@
 #include "board_config.h"
 #include "hal.h"
 #include "services/volume_service.h"
+#include "services/power_service.h"
 #include "ui/ui_components.h"
 #include "wifi_svc.h"
 
@@ -45,6 +46,7 @@ lv_obj_t *s_panel = nullptr;
 lv_obj_t *s_wifi_tile = nullptr;
 lv_obj_t *s_wifi_tile_icon = nullptr;
 lv_obj_t *s_lock_tile = nullptr;
+lv_obj_t *s_screen_tile = nullptr;
 lv_obj_t *s_brightness = nullptr;
 lv_obj_t *s_volume = nullptr;
 lv_obj_t *s_volume_icon = nullptr;
@@ -150,6 +152,13 @@ void refresh_lock_tile()
     lv_obj_set_style_bg_color(s_lock_tile, lv_color_hex(locked ? color_tile_on : color_tile), 0);
 }
 
+void refresh_screen_tile()
+{
+    if (!s_screen_tile) return;
+    lv_obj_set_style_bg_color(s_screen_tile,
+        lv_color_hex(power_svc_screen_off() ? color_tile_on : color_tile), 0);
+}
+
 void refresh_volume_icon(int percent)
 {
     if (!s_volume_icon) return;
@@ -169,6 +178,7 @@ void refresh_status()
     }
 
     refresh_lock_tile();
+    refresh_screen_tile();
     if (s_brightness && !s_brightness_dragging) {
         lv_slider_set_value(s_brightness, clamp_int(hal_get_brightness(), 8, 100), LV_ANIM_OFF);
     }
@@ -189,6 +199,15 @@ void on_lock_clicked(lv_event_t *)
 {
     hal_autorotate_enable(!hal_autorotate_enabled());
     refresh_lock_tile();
+}
+
+void on_screen_clicked(lv_event_t *)
+{
+    power_svc_toggle_screen();
+    refresh_screen_tile();
+    // Close the panel after switching off the backlight so the hidden panel
+    // cannot consume the first touch used to wake the screen.
+    if (power_svc_screen_off()) control_center_close();
 }
 
 void on_brightness_event(lv_event_t *event)
@@ -302,7 +321,7 @@ lv_obj_t *make_tile(lv_obj_t *parent, int x, int y)
 {
     lv_obj_t *tile = lv_obj_create(parent);
     lv_obj_remove_style_all(tile);
-    lv_obj_set_size(tile, 104, 70);
+    lv_obj_set_size(tile, 68, 70);
     lv_obj_set_pos(tile, x, y);
     lv_obj_set_style_radius(tile, 16, 0);
     lv_obj_set_style_bg_color(tile, lv_color_hex(color_tile), 0);
@@ -364,7 +383,7 @@ void create_widgets()
     lv_obj_clear_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(s_panel, LV_OBJ_FLAG_SCROLL_CHAIN);
 
-    s_wifi_tile = make_tile(s_panel, 12, 16);
+    s_wifi_tile = make_tile(s_panel, 8, 16);
     lv_obj_add_event_cb(s_wifi_tile, on_wifi_clicked, LV_EVENT_CLICKED, nullptr);
     s_wifi_tile_icon = make_icon(s_wifi_tile, wifi_icons[0]);
     lv_obj_align(s_wifi_tile_icon, LV_ALIGN_TOP_MID, 0, 10);
@@ -375,7 +394,7 @@ void create_widgets()
     lv_obj_align(wifi_label, LV_ALIGN_BOTTOM_MID, 0, -10);
     lv_obj_clear_flag(wifi_label, LV_OBJ_FLAG_CLICKABLE);
 
-    s_lock_tile = make_tile(s_panel, 124, 16);
+    s_lock_tile = make_tile(s_panel, 86, 16);
     lv_obj_add_event_cb(s_lock_tile, on_lock_clicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_t *lock_icon = lv_label_create(s_lock_tile);
     lv_label_set_text(lock_icon, LV_SYMBOL_REFRESH);
@@ -389,6 +408,20 @@ void create_widgets()
     lv_obj_set_style_text_font(lock_label, &lv_font_montserrat_12, 0);
     lv_obj_align(lock_label, LV_ALIGN_BOTTOM_MID, 0, -10);
     lv_obj_clear_flag(lock_label, LV_OBJ_FLAG_CLICKABLE);
+
+    s_screen_tile = make_tile(s_panel, 164, 16);
+    lv_obj_add_event_cb(s_screen_tile, on_screen_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t *screen_icon = lv_label_create(s_screen_tile);
+    lv_label_set_text(screen_icon, LV_SYMBOL_EYE_CLOSE);
+    lv_obj_set_style_text_color(screen_icon, lv_color_hex(ui_components::color_text), 0);
+    lv_obj_set_style_text_font(screen_icon, &lv_font_montserrat_16, 0);
+    lv_obj_align(screen_icon, LV_ALIGN_TOP_MID, 0, 10);
+    lv_obj_t *screen_label = lv_label_create(s_screen_tile);
+    lv_label_set_text(screen_label, "Screen");
+    lv_obj_set_style_text_color(screen_label, lv_color_hex(ui_components::color_text), 0);
+    lv_obj_set_style_text_font(screen_label, &lv_font_montserrat_10, 0);
+    lv_obj_align(screen_label, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_clear_flag(screen_label, LV_OBJ_FLAG_CLICKABLE);
 
     make_sun_icon(s_panel, 16, 106);
     s_brightness = make_slider(s_panel, 104, 8);

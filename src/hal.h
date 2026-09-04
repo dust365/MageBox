@@ -7,6 +7,10 @@
 bool hal_init();
 void hal_set_brightness(uint8_t percent);
 uint8_t hal_get_brightness();
+void hal_screen_off();
+void hal_screen_wake();
+bool hal_screen_is_off();
+bool hal_take_touch_activity();
 float hal_battery_voltage();
 int hal_battery_percent();
 bool hal_is_charging();

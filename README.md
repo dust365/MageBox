@@ -104,4 +104,4 @@ pio device monitor
 
 若识别不到串口，按住 **BOOT** 再插 USB，松开后烧录。烧完按一次复位。
 
-Arduino 内核使用 pioarduino **53.03.13**（对应官方文档的 Arduino 3.2.x）。USB CDC 已打开，串口波特率 115200。
+Arduino 内核使用 pioarduino **54.03.20**（Arduino-ESP32 3.2.0，与板卡官方音频示例一致）。USB CDC 已打开，串口波特率 115200。

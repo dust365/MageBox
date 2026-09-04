@@ -9,6 +9,7 @@
 #include "ui/debug_overlay.h"
 #include "ui/ui_components.h"
 #include "ui/volume_overlay.h"
+#include "services/power_service.h"
 #include "wifi_svc.h"
 
 #include <Arduino.h>
@@ -63,6 +64,7 @@ AppId s_foreground = AppId::none;
 AppId s_running = AppId::none;
 AppId s_recent = AppId::none;
 bool s_app_alive = false;
+lv_obj_t *s_shutdown_overlay = nullptr;
 
 enum class GestureKind : uint8_t {
     idle,
@@ -167,6 +169,7 @@ void pop_overlay()
 void close_app_screen()
 {
     const AppDefinition *running = app_find(s_running);
+    if (running && running->deactivate) running->deactivate();
     if (running && running->destroy) running->destroy();
     s_running = AppId::none;
     s_nav_depth = 0;
@@ -177,8 +180,15 @@ void close_app_screen()
     }
 }
 
+void deactivate_running_app()
+{
+    const AppDefinition *app = app_find(s_running);
+    if (app && app->deactivate) app->deactivate();
+}
+
 void show_home_screen()
 {
+    deactivate_running_app();
     s_foreground = AppId::none;
     lv_screen_load(s_home);
 }
@@ -216,6 +226,95 @@ void go_back()
 {
     if (s_nav_depth > 0) pop_overlay();
     else if (s_foreground != AppId::none) show_home_screen();
+}
+
+static void close_shutdown_confirm()
+{
+    power_svc_cancel_shutdown();
+    if (s_shutdown_overlay) {
+        lv_obj_delete(s_shutdown_overlay);
+        s_shutdown_overlay = nullptr;
+    }
+}
+
+static void confirm_shutdown(lv_event_t *)
+{
+    power_svc_confirm_shutdown();
+}
+
+void show_shutdown_confirm_impl()
+{
+    if (s_shutdown_overlay) return;
+    power_svc_request_shutdown();
+    lv_display_t *display = lv_display_get_default();
+    if (!display) return;
+    s_shutdown_overlay = lv_obj_create(lv_display_get_layer_top(display));
+    lv_obj_remove_style_all(s_shutdown_overlay);
+    lv_obj_set_size(s_shutdown_overlay, BOARD_LCD_H_RES, BOARD_LCD_V_RES);
+    lv_obj_set_style_bg_color(s_shutdown_overlay, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(s_shutdown_overlay, LV_OPA_70, 0);
+    lv_obj_clear_flag(s_shutdown_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_shutdown_overlay, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *panel = lv_obj_create(s_shutdown_overlay);
+    lv_obj_remove_style_all(panel);
+    lv_obj_set_size(panel, 216, 136);
+    lv_obj_set_style_radius(panel, 18, 0);
+    lv_obj_set_style_bg_color(panel, lv_color_hex(ui_components::color_card), 0);
+    lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(panel, 1, 0);
+    lv_obj_set_style_border_color(panel, lv_color_hex(0x48484A), 0);
+    lv_obj_set_style_shadow_width(panel, 18, 0);
+    lv_obj_set_style_shadow_opa(panel, LV_OPA_40, 0);
+    lv_obj_center(panel);
+
+    lv_obj_t *icon = lv_label_create(panel);
+    lv_label_set_text(icon, LV_SYMBOL_POWER);
+    lv_obj_set_size(icon, 30, 30);
+    lv_obj_set_style_radius(icon, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(icon, lv_color_hex(0xFF453A), 0);
+    lv_obj_set_style_bg_opa(icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(icon, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(icon, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_pad_top(icon, 6, 0);
+    lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, 12);
+
+    lv_obj_t *title = lv_label_create(panel);
+    lv_label_set_text(title, "Turn off device?");
+    lv_obj_set_style_text_color(title, lv_color_hex(ui_components::color_text), 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 47);
+
+    lv_obj_t *subtitle = lv_label_create(panel);
+    lv_label_set_text(subtitle, "Music will stop and the screen will turn off.");
+    lv_obj_set_width(subtitle, 190);
+    lv_obj_set_style_text_color(subtitle, lv_color_hex(ui_components::color_muted), 0);
+    lv_obj_set_style_text_font(subtitle, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_align(subtitle, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 68);
+
+    lv_obj_t *cancel = lv_button_create(panel);
+    lv_obj_set_size(cancel, 88, 30);
+    lv_obj_set_style_radius(cancel, 10, 0);
+    lv_obj_set_style_bg_color(cancel, lv_color_hex(0x48484A), 0);
+    lv_obj_align(cancel, LV_ALIGN_BOTTOM_LEFT, 14, -12);
+    lv_obj_add_event_cb(cancel, [](lv_event_t *) { close_shutdown_confirm(); }, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t *cancel_label = lv_label_create(cancel);
+    lv_label_set_text(cancel_label, "Cancel");
+    lv_obj_set_style_text_font(cancel_label, &lv_font_montserrat_12, 0);
+    lv_obj_center(cancel_label);
+
+    lv_obj_t *confirm = lv_button_create(panel);
+    lv_obj_set_size(confirm, 88, 30);
+    lv_obj_set_style_radius(confirm, 10, 0);
+    lv_obj_set_style_bg_color(confirm, lv_color_hex(0xFF453A), 0);
+    lv_obj_align(confirm, LV_ALIGN_BOTTOM_RIGHT, -14, -12);
+    lv_obj_add_event_cb(confirm, confirm_shutdown, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t *confirm_label = lv_label_create(confirm);
+    lv_label_set_text(confirm_label, "Turn off");
+    lv_obj_set_style_text_font(confirm_label, &lv_font_montserrat_12, 0);
+    lv_obj_center(confirm_label);
 }
 
 void launch_app(AppId id)
@@ -538,10 +637,12 @@ void ui_go_home()
 }
 
 void ui_go_back() { go_back(); }
+void ui_show_shutdown_confirm() { show_shutdown_confirm_impl(); }
 
 void ui_show_recents()
 {
     if (!s_recents) return;
+    deactivate_running_app();
     control_center_close();
     refresh_recents_card();
     lv_obj_remove_flag(s_recents, LV_OBJ_FLAG_HIDDEN);

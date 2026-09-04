@@ -24,6 +24,7 @@ struct AppDefinition {
     void (*create)(const AppContext &context);
     void (*update)();
     void (*destroy)();
+    void (*deactivate)();
 };
 
 const AppDefinition *app_find(AppId id);

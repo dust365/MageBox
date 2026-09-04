@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <TouchDrvCSTXXX.hpp>
 #include <SensorQMI8658.hpp>
+#include <esp_sleep.h>
 #include <math.h>
 
 /* Keep the ST7789 in its native orientation. The Waveshare factory example
@@ -50,6 +51,8 @@ static SensorQMI8658 s_imu;
 
 static lv_display_t *s_disp = nullptr;
 static uint8_t s_brightness = LCD_BRIGHTNESS_DEFAULT;
+static bool s_screen_off = false;
+static volatile bool s_touch_activity = false;
 static bool s_touch_ok = false;
 static bool s_imu_ok = false;
 static int s_rot = 0;
@@ -221,6 +224,11 @@ static void lv_touch_cb(lv_indev_t *indev, lv_indev_data_t *data)
     if (irq || digitalRead(PIN_TP_INT) == LOW) {
         uint8_t n = s_touch.getPoint(&x, &y, 1);
         if (n > 0) {
+        if (s_screen_off) {
+            s_touch_activity = true;
+            data->state = LV_INDEV_STATE_RELEASED;
+            return;
+        }
             map_touch(&x, &y);
             clamp_xy(&x, &y);
             data->point.x = x;
@@ -326,11 +334,40 @@ bool hal_init()
 void hal_set_brightness(uint8_t percent)
 {
     apply_brightness(percent);
+    if (s_screen_off) ledcWrite(PIN_LCD_BL, 0);
 }
 
 uint8_t hal_get_brightness()
 {
     return s_brightness;
+}
+
+void hal_screen_off()
+{
+    if (s_screen_off) return;
+    s_screen_off = true;
+    ledcWrite(PIN_LCD_BL, 0);
+}
+
+void hal_screen_wake()
+{
+    if (!s_screen_off) return;
+    s_screen_off = false;
+    uint32_t duty = (uint32_t)s_brightness * ((1 << LCD_BL_LEDC_RES) - 1) / 100;
+    ledcWrite(PIN_LCD_BL, duty);
+    if (s_disp) lv_obj_invalidate(lv_screen_active());
+}
+
+bool hal_screen_is_off()
+{
+    return s_screen_off;
+}
+
+bool hal_take_touch_activity()
+{
+    bool activity = s_touch_activity;
+    s_touch_activity = false;
+    return activity;
 }
 
 float hal_battery_voltage()
