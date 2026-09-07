@@ -1,6 +1,7 @@
 #include "photos.h"
 
 #include "board_config.h"
+#include "services/jpeg_service.h"
 #include "services/sd_service.h"
 #include "ui/ui_components.h"
 
@@ -21,10 +22,9 @@ constexpr int swipe_minimum = 24;
 constexpr const char *photo_dir = "/photo";
 constexpr uint16_t fill_color = 0x18C3; /* 0x1A1A1A in RGB565 */
 
-JPEGDEC s_jpeg;
 lv_image_dsc_t s_dsc = {};
 uint16_t *s_pixels = nullptr;
-char s_files[sd_svc_list_max][sd_svc_name_max] = {};
+char (*s_files)[sd_svc_name_max] = nullptr;
 int s_count = 0;
 int s_wanted = 0;
 int s_shown = -1;
@@ -141,10 +141,6 @@ bool ensure_buffer()
     s_pixels = (uint16_t *)heap_caps_malloc((size_t)photo_w * photo_h * sizeof(uint16_t),
                                             MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!s_pixels) {
-        s_pixels = (uint16_t *)heap_caps_malloc((size_t)photo_w * photo_h * sizeof(uint16_t),
-                                                MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    }
-    if (!s_pixels) {
         Serial.println("Photos buffer alloc failed");
         return false;
     }
@@ -169,14 +165,20 @@ bool decode_photo(const char *path)
 {
     if (!ensure_buffer() || !path) return false;
     fill_background();
-    if (!s_jpeg.open(path, jpeg_open, jpeg_close, jpeg_read, jpeg_seek, jpeg_draw)) {
-        Serial.printf("Photos open failed: %s\n", path);
+    JPEGDEC *decoder = jpeg_svc_acquire();
+    if (!decoder) {
+        Serial.println("Photos decoder busy");
         return false;
     }
-    s_jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
+    if (!decoder->open(path, jpeg_open, jpeg_close, jpeg_read, jpeg_seek, jpeg_draw)) {
+        Serial.printf("Photos open failed: %s\n", path);
+        jpeg_svc_release(decoder);
+        return false;
+    }
+    decoder->setPixelType(RGB565_LITTLE_ENDIAN);
 
-    const int src_w = s_jpeg.getWidth();
-    const int src_h = s_jpeg.getHeight();
+    const int src_w = decoder->getWidth();
+    const int src_h = decoder->getHeight();
     int scale = 0;
     int out_w = src_w;
     int out_h = src_h;
@@ -198,8 +200,9 @@ bool decode_photo(const char *path)
     s_draw_x = (photo_w - out_w) / 2;
     s_draw_y = (photo_h - out_h) / 2;
 
-    const int ok = s_jpeg.decode(0, 0, scale);
-    s_jpeg.close();
+    const int ok = decoder->decode(0, 0, scale);
+    decoder->close();
+    jpeg_svc_release(decoder);
     if (!ok) {
         Serial.printf("Photos decode failed: %s (%dx%d)\n", path, src_w, src_h);
         fill_background();
@@ -252,6 +255,8 @@ void photos_app::create(const AppContext &context)
     s_count = 0;
     s_wanted = 0;
     s_shown = -1;
+    s_files = (char (*)[sd_svc_name_max])heap_caps_calloc(
+        sd_svc_list_max, sd_svc_name_max, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
     s_image = lv_image_create(context.root);
     lv_obj_set_size(s_image, photo_w, photo_h);
@@ -280,6 +285,11 @@ void photos_app::create(const AppContext &context)
 
     ui_components::make_back_hint(context.root);
 
+    if (!s_files) {
+        set_message("Not enough memory");
+        return;
+    }
+
     if (!sd_svc_begin()) {
         set_message("No TF card");
         return;
@@ -303,6 +313,11 @@ void photos_app::update()
 
 void photos_app::destroy()
 {
+    if (s_pixels) heap_caps_free(s_pixels);
+    if (s_files) heap_caps_free(s_files);
+    s_pixels = nullptr;
+    s_files = nullptr;
+    s_dsc = {};
     s_image = nullptr;
     s_message = nullptr;
     s_index = nullptr;

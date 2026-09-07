@@ -3,6 +3,7 @@
 #include "board_config.h"
 #include "hal.h"
 #include "services/audio_service.h"
+#include "services/video_service.h"
 
 #include <Arduino.h>
 #include <SD_MMC.h>
@@ -61,6 +62,7 @@ void power_svc_confirm_shutdown()
     if (!s_shutdown_pending) return;
     s_shutdown_pending = false;
     audio_svc_stop();
+    video_svc_stop();
     pinMode(PIN_PA_CTRL, OUTPUT);
     digitalWrite(PIN_PA_CTRL, LOW);
     hal_screen_off();

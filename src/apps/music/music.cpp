@@ -11,13 +11,14 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <esp_heap_caps.h>
 
 namespace {
 
 constexpr const char *music_dir = "/music";
 constexpr uint32_t restart_after_sec = 3;
 
-char s_files[sd_svc_list_max][sd_svc_name_max] = {};
+char (*s_files)[sd_svc_name_max] = nullptr;
 int s_count = 0;
 int s_index = -1;
 bool s_on_player = false;
@@ -274,6 +275,11 @@ void set_empty(const char *text)
 void scan_library()
 {
     s_count = 0;
+    if (!s_files) {
+        set_empty("Not enough memory");
+        fill_list();
+        return;
+    }
     if (!sd_svc_begin()) {
         set_empty("No TF card");
         fill_list();
@@ -316,6 +322,8 @@ void music_app::create(const AppContext &context)
     s_index = -1;
     s_on_player = false;
     s_current_mark = nullptr;
+    s_files = (char (*)[sd_svc_name_max])heap_caps_calloc(
+        sd_svc_list_max, sd_svc_name_max, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     audio_svc_begin();
 
     s_library = lv_obj_create(context.root);
@@ -423,6 +431,8 @@ void music_app::destroy()
 {
     audio_svc_stop();
     audio_player_view_reset();
+    if (s_files) heap_caps_free(s_files);
+    s_files = nullptr;
     s_library = nullptr;
     s_player = nullptr;
     s_list = nullptr;
