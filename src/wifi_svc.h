@@ -16,6 +16,7 @@ const char *wifi_svc_status_text();
 
 bool wifi_svc_time_ready();
 void wifi_svc_clock(int *hour, int *minute);
+bool wifi_svc_clock_hms(int *hour, int *minute, int *second);
 
 void wifi_svc_start_portal();
 void wifi_svc_stop_portal();

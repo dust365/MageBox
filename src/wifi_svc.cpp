@@ -289,6 +289,17 @@ bool wifi_svc_time_ready()
     return s_time_ok;
 }
 
+bool wifi_svc_clock_hms(int *hour, int *minute, int *second)
+{
+    if (!hour || !minute || !second || !s_time_ok) return false;
+    struct tm t = {};
+    if (!getLocalTime(&t, 0) || (t.tm_year + 1900) < 2024) return false;
+    *hour = t.tm_hour;
+    *minute = t.tm_min;
+    *second = t.tm_sec;
+    return true;
+}
+
 void wifi_svc_clock(int *hour, int *minute)
 {
     struct tm t = {};

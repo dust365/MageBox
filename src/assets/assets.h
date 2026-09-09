@@ -12,6 +12,7 @@ LV_IMG_DECLARE(img_app_video);
 LV_IMG_DECLARE(img_app_analyzer);
 LV_IMG_DECLARE(img_app_gravity);
 LV_IMG_DECLARE(img_app_ebook);
+LV_IMG_DECLARE(img_app_clock);
 LV_IMG_DECLARE(esp_brookesia_app_icon_launcher_squareline_112_112);
 
 /* Official Brookesia small (240px) status / recents assets */

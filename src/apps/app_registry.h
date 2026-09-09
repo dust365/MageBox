@@ -15,6 +15,7 @@ enum class AppId : uint8_t {
     analyzer,
     gravity,
     squareline,
+    clock,
 };
 
 struct AppDefinition {

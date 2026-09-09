@@ -105,3 +105,5 @@ pio device monitor
 若识别不到串口，按住 **BOOT** 再插 USB，松开后烧录。烧完按一次复位。
 
 Arduino 内核使用 pioarduino **54.03.20**（Arduino-ESP32 3.2.0，与板卡官方音频示例一致）。USB CDC 已打开，串口波特率 115200。
+
+视频格式、FFmpeg 转码命令、检查方式和 TF 卡播放流程见 [`docs/video_playback.md`](docs/video_playback.md)。

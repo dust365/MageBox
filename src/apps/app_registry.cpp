@@ -2,6 +2,7 @@
 
 #include "aichats/aichats.h"
 #include "analyzer/analyzer.h"
+#include "clock/clock.h"
 #include "gravity/gravity.h"
 #include "music/music.h"
 #include "photos/photos.h"
@@ -17,6 +18,8 @@ void no_destroy() {}
 void no_deactivate() {}
 
 const AppDefinition k_apps[] = {
+    {AppId::clock, "Clock", &img_app_clock, clock_app::create, clock_app::update, clock_app::destroy,
+     clock_app::deactivate},
     {AppId::photos, "Photos", &img_app_photos, photos_app::create, photos_app::update, photos_app::destroy, no_deactivate},
     {AppId::music, "Music", &img_app_music, music_app::create, music_app::update, music_app::destroy, music_app::deactivate},
     {AppId::aichats, "AIChats", &img_app_aichats, aichats_app::create, no_update, no_destroy, no_deactivate},

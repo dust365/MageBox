@@ -29,7 +29,7 @@ constexpr int dot_inactive_size = 12;
 constexpr int dot_active_width = 40;
 constexpr int dot_gap = 30;
 constexpr int dot_bottom = 30;
-constexpr int page_count = 4;
+constexpr int page_count = 5;
 constexpr int bottom_edge = 10;
 constexpr int top_edge = 12;
 constexpr int direction_lock = 8;
@@ -337,10 +337,11 @@ void on_icon_clicked(lv_event_t *event)
     launch_app((AppId)(uintptr_t)lv_event_get_user_data(event));
 }
 
-void create_icon(lv_obj_t *page, const AppDefinition &app, int slot)
+void create_icon(lv_obj_t *page, const AppDefinition &app, int slot, bool centered = false)
 {
     int y = (table_height - icon_cell_size) / 2;
-    int x = (BOARD_LCD_H_RES - table_width) / 2 + slot * (icon_cell_size + icon_gap);
+    int x = centered ? (BOARD_LCD_H_RES - icon_cell_size) / 2 :
+        (BOARD_LCD_H_RES - table_width) / 2 + slot * (icon_cell_size + icon_gap);
     lv_obj_t *wrapper = lv_obj_create(page);
     lv_obj_remove_style_all(wrapper);
     lv_obj_set_size(wrapper, icon_cell_size, icon_cell_size);
@@ -431,7 +432,7 @@ void create_home()
         lv_obj_set_style_pad_all(page, 0, 0);
         const AppDefinition *first = app_at(page_index * 2);
         const AppDefinition *second = app_at(page_index * 2 + 1);
-        if (first) create_icon(page, *first, 0);
+        if (first) create_icon(page, *first, 0, first && !second);
         if (second) create_icon(page, *second, 1);
     }
 
