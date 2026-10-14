@@ -26,7 +26,7 @@ const AppDefinition k_apps[] = {
     {AppId::video, "Video", &img_app_video, video_app::create, video_app::update,
      video_app::destroy, video_app::deactivate},
     {AppId::analyzer, "Analyzer", &img_app_analyzer, analyzer_app::create, analyzer_app::update, analyzer_app::destroy, no_deactivate},
-    {AppId::gravity, "Gravity", &img_app_gravity, gravity_app::create, gravity_app::update, gravity_app::destroy, no_deactivate},
+    {AppId::gravity, "Game", &img_app_gravity, gravity_app::create, gravity_app::update, gravity_app::destroy, no_deactivate},
     {AppId::squareline, "Squareline", &esp_brookesia_app_icon_launcher_squareline_112_112,
      squareline_app::create, squareline_app::update, squareline_app::destroy, no_deactivate},
     {AppId::settings, "Settings", &img_app_settings, settings_app::create, settings_app::update, settings_app::destroy, no_deactivate},
