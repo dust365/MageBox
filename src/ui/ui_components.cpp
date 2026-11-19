@@ -14,6 +14,7 @@ lv_obj_t *make_back_hint(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(bar, LV_OPA_40, 0);
     lv_obj_align(bar, LV_ALIGN_BOTTOM_MID, 0, -6);
     lv_obj_add_flag(bar, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_remove_flag(bar, LV_OBJ_FLAG_CLICKABLE);
     return bar;
 }
 

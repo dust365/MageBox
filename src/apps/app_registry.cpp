@@ -4,6 +4,7 @@
 #include "analyzer/analyzer.h"
 #include "clock/clock.h"
 #include "gravity/gravity.h"
+#include "keyboard/keyboard.h"
 #include "music/music.h"
 #include "photos/photos.h"
 #include "settings/settings.h"
@@ -18,6 +19,8 @@ void no_destroy() {}
 void no_deactivate() {}
 
 const AppDefinition k_apps[] = {
+    {AppId::keyboard, "Keyboard", &img_app_keyboard, keyboard_app::create, keyboard_app::update, keyboard_app::destroy,
+     keyboard_app::deactivate},
     {AppId::clock, "Clock", &img_app_clock, clock_app::create, clock_app::update, clock_app::destroy,
      clock_app::deactivate},
     {AppId::photos, "Photos", &img_app_photos, photos_app::create, photos_app::update, photos_app::destroy, no_deactivate},

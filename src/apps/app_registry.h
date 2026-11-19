@@ -16,6 +16,7 @@ enum class AppId : uint8_t {
     gravity,
     squareline,
     clock,
+    keyboard,
 };
 
 struct AppDefinition {
